@@ -130,11 +130,18 @@ jobs:
         run: |
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
           Write-Host "VS: $vs"
-          $p = Start-Process -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe" -Wait -PassThru -ArgumentList `
-            'modify','--installPath',"`"$vs`"",'--add','Microsoft.VisualStudio.Component.VC.ATL','--quiet','--norestart','--noUpdateInstaller'
+          $exe = Join-Path $env:RUNNER_TEMP 'vs_enterprise.exe'
+          Invoke-WebRequest -Uri https://aka.ms/vs/18/stable/vs_enterprise.exe -OutFile $exe
+          $p = Start-Process -FilePath $exe -Wait -PassThru -ArgumentList `
+            'modify','--installPath',"`"$vs`"", `
+            '--add','Microsoft.VisualStudio.Component.VC.14.44.17.14.ATL', `
+            '--add','Microsoft.VisualStudio.Component.VC.ATL', `
+            '--quiet','--wait','--norestart','--nocache'
+          Write-Host "exit code: $($p.ExitCode)"
           if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) { exit $p.ExitCode }
-          Get-ChildItem "$vs\VC\Tools\MSVC" | Select-Object Name
-          Get-ChildItem "$vs\VC\Tools\MSVC\*\atlmfc\include\atlbase.h" | Select-Object FullName
+          $f = Get-ChildItem "$vs\VC\Tools\MSVC\*\atlmfc\include\atlbase.h" -ErrorAction SilentlyContinue
+          $f | ForEach-Object { Write-Host $_.FullName }
+          if (-not $f) { throw 'atlbase.h not found after install' }
 
       - uses: Eden-CI/msvc-dev-cmd@master
         name: Native Tools Command Prompt.
